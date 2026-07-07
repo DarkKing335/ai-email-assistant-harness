@@ -1,0 +1,12 @@
+{
+  "draft_id": "dr_fixture_001",
+  "email_message_id": "msg_fixture_001",
+  "thread_id": "thread_fixture_001",
+  "subject": "Re: Follow-up: Project Proposal",
+  "to": "client@example.com",
+  "body": "Thank you for following up on the proposal. The timeline remains as discussed, with deliverables scheduled for the end of Q3. The pricing structure outlined in the proposal is valid for 30 days from the date of issue.\n\nPlease let me know if you have any further questions.",
+  "guardrails_passed": true,
+  "pii_detected": false,
+  "created_at": "2026-07-07T08:05:00Z",
+  "gmail_draft_id": "draft_gmail_fixture_001"
+}
