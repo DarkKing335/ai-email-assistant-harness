@@ -102,8 +102,11 @@ async def test_injection_intent_flags_and_sets_metadata():
 # ── Invariants: opt-in, cached, fail-open ────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_inactive_without_client_or_key():
-    # No injected client and (in this env) no API key → rail is inert, no call.
+async def test_inactive_without_client_or_key(monkeypatch):
+    # Force "no API key" so the rail is inert regardless of the ambient .env.
+    from src.config.settings import settings
+    monkeypatch.setattr(settings, "openai_api_key", "")
+    monkeypatch.setattr(settings, "gemini_api_key", "")
     draft = Draft(to="a@acme.com", subject="Re", body="Some body text here.")
     result = await GroundingRail().check(_octx(draft, _thread()))
     assert result.verdict == Verdict.ALLOW

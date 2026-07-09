@@ -65,5 +65,6 @@ class ApprovalStep(BaseWorkflowStep):
         # Cập nhật ID và đối tượng vào Context
         ctx.approval_record_id = decision_record.approval_id
         ctx.metadata["approval_record"] = decision_record
+        ctx.is_approved = decision_record.is_approved
         
         return ctx

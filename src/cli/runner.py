@@ -84,13 +84,12 @@ async def run_email_workflow(thread_id: str, demo: bool = False) -> None:
 
 def _display_result(ctx, elapsed: float) -> None:
     """Display the final result of a workflow run."""
-    from src.workflow.engine.orchestrator import WorkflowContext
-
     print_rule()
     console.print()
 
-    if ctx.error:
-        print_error(f"Workflow [bold]{ctx.workflow_id}[/] failed: {ctx.error}")
+    error = ctx.metadata.get("error")
+    if error:
+        print_error(f"Workflow [bold]{ctx.workflow_id}[/] failed: {error}")
         return
 
     # Draft created
@@ -121,15 +120,16 @@ def _display_result(ctx, elapsed: float) -> None:
         )
 
     # Approval result
-    if ctx.approval:
-        if ctx.approval.is_approved:
+    approval = ctx.metadata.get("approval_record")
+    if approval:
+        if approval.is_approved:
             print_success(
-                f"Draft approved by [bold]{ctx.approval.reviewer}[/] → Email sent!"
+                f"Draft approved by [bold]{approval.reviewer}[/] → Email sent!"
             )
         else:
             print_warning(
-                f"Draft rejected by [bold]{ctx.approval.reviewer}[/]. "
-                f"Reason: {ctx.approval.comments or 'No reason given'}"
+                f"Draft rejected by [bold]{approval.reviewer}[/]. "
+                f"Reason: {approval.comments or 'No reason given'}"
             )
     else:
         print_info(

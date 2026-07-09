@@ -50,13 +50,15 @@ async def main(thread_id: str, approve: bool) -> None:
     ctx = await task
 
     print("\n=== RESULT ===")
-    if ctx.error:
-        print("error:", ctx.error)
+    error = ctx.metadata.get("error")
+    if error:
+        print("error:", error)
     print("draft to         :", ctx.draft.to if ctx.draft else None)
     print("guardrails_passed:", ctx.draft.guardrails_passed if ctx.draft else None)
-    if ctx.approval:
-        print("decision         :", ctx.approval.decision.value if ctx.approval.decision else None)
-        print("reviewer         :", ctx.approval.reviewer)
+    approval = ctx.metadata.get("approval_record")
+    if approval:
+        print("decision         :", approval.decision.value if approval.decision else None)
+        print("reviewer         :", approval.reviewer)
     if not resolved:
         print("(no draft reached the approval gate - check the error above)")
 

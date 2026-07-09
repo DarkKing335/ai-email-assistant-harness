@@ -47,9 +47,9 @@ async def test_draft_step_delegates_to_agent_and_sets_context_draft():
     )
     agent = _FakeAgent(draft)
     step = DraftStep(agent=agent)
-    ctx = SimpleNamespace(thread=thread, draft=None)
+    ctx = SimpleNamespace(email_thread=thread, draft=None)
 
-    result = await step.run(ctx)
+    result = await step.execute(ctx)
 
     assert result is ctx
     assert ctx.draft is draft
@@ -59,7 +59,7 @@ async def test_draft_step_delegates_to_agent_and_sets_context_draft():
 @pytest.mark.asyncio
 async def test_draft_step_requires_thread():
     step = DraftStep(agent=_FakeAgent(Draft()))
-    ctx = SimpleNamespace(thread=None, draft=None)
+    ctx = SimpleNamespace(email_thread=None, draft=None)
 
     with pytest.raises(ValueError, match="no email thread"):
-        await step.run(ctx)
+        await step.execute(ctx)
