@@ -3,19 +3,12 @@ orchestrator.py — Email workflow orchestrator.
 
 Drives the full pipeline from email receipt to send (or termination).
 Calls steps in sequence, updates the state machine, and catches errors.
-
-Flow:
-  RECEIVED → ingest → INGESTED → draft → DRAFTED → guardrails
-  → GUARDRAILS_PASSED → approval gate → APPROVED → send → SENT → audit → AUDITED
-
-This is a thin coordinator — all business logic lives in the steps.
 """
 from __future__ import annotations
 
 import logging
 import uuid
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from src.config.constants import WorkflowStatus, AuditAction, UserRole
 from src.config.settings import settings
@@ -29,17 +22,6 @@ from src.workflow.engine.state_machine import WorkflowStateMachine, WorkflowTran
 logger = logging.getLogger("email_assistant.workflow.orchestrator")
 
 
-@dataclass
-class WorkflowContext:
-    """Shared context passed between workflow steps."""
-    workflow_id: str = field(default_factory=lambda: f"wf_{uuid.uuid4().hex[:16]}")
-    thread: Optional[EmailThread] = None
-    draft: Optional[Draft] = None
-    approval: Optional[ApprovalRecord] = None
-    error: Optional[str] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
-
-
 class EmailWorkflowOrchestrator:
     """Runs the email processing pipeline end-to-end."""
 
@@ -50,7 +32,6 @@ class EmailWorkflowOrchestrator:
         from src.workflow.steps.approval_step import ApprovalStep
         from src.workflow.steps.send_step import SendStep
         from src.workflow.steps.audit_step import AuditStep
-        from src.audit.logger import audit_logger
 
         from src.guardrails.registry import build_default_guardrails
         from src.guardrails.result import GuardrailStage
@@ -60,7 +41,6 @@ class EmailWorkflowOrchestrator:
         self._approval = ApprovalStep()
         self._send = SendStep()
         self._audit = AuditStep()
-        self._audit_logger = audit_logger
 
         registry = build_default_guardrails()
         self._input_guardrails = registry.pipeline(GuardrailStage.INPUT)
@@ -68,7 +48,9 @@ class EmailWorkflowOrchestrator:
 
     async def run(self, thread_id: str) -> WorkflowContext:
         """Execute the full email workflow for a given Gmail thread ID."""
-        ctx = WorkflowContext()
+        # Khởi tạo Context chuẩn
+        workflow_id = f"wf_{uuid.uuid4().hex[:16]}"
+        ctx = WorkflowContext(workflow_id=workflow_id, thread_id=thread_id)
         sm = WorkflowStateMachine(ctx.workflow_id)
 
         logger.info("Workflow %s started for thread %s", ctx.workflow_id, thread_id)
@@ -137,8 +119,8 @@ class EmailWorkflowOrchestrator:
         if sm.is_terminal:
             return ctx
 
-        # Check approval result
-        if ctx.approval and ctx.approval.is_approved:
+        # Check approval result trực tiếp từ thuộc tính is_approved của Context
+        if ctx.is_approved:
             sm.transition(WorkflowStatus.APPROVED)
         else:
             sm.transition(WorkflowStatus.REJECTED)
@@ -179,7 +161,8 @@ class EmailWorkflowOrchestrator:
             raise
         except Exception as e:
             logger.error("Step '%s' failed: %s", step_name, e, exc_info=True)
-            ctx.error = str(e)
+            # Lưu lỗi vào metadata vì Context chuẩn không có trường error
+            ctx.metadata["error"] = str(e)
             try:
                 sm.transition(WorkflowStatus.ERROR)
             except WorkflowTransitionError:

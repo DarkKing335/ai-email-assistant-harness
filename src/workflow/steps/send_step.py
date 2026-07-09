@@ -6,20 +6,24 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from src.workflow.engine.orchestrator import WorkflowContext
-
+from src.workflow.steps.base_step import BaseWorkflowStep
 from src.tools.registry import tool_registry
+
+if TYPE_CHECKING:
+    from src.models.workflow_context import WorkflowContext
 
 logger = logging.getLogger("email_assistant.workflow.steps.send")
 
+class SendStep(BaseWorkflowStep):
+    """Gửi email bản nháp nếu đã được Approve."""
 
-class SendStep:
-    """Sends the approved Gmail draft."""
+    @property
+    def name(self) -> str:
+        return "send_step"
 
-    async def run(self, ctx: "WorkflowContext") -> "WorkflowContext":
+    async def execute(self, ctx: "WorkflowContext") -> "WorkflowContext":
         draft = ctx.draft
-        approval = ctx.approval
+        approval = ctx.metadata.get("approval_record")
 
         if draft is None or approval is None:
             raise ValueError("SendStep: missing draft or approval in context")
