@@ -1,37 +1,30 @@
 """
 approval_step.py — Human-in-the-loop approval gate.
-
-This step is the core Harness Engineering concept: the workflow CANNOT
-proceed to send without an explicit human decision.
-
-For the CLI flow, the step writes the draft to an in-memory queue and
-blocks until the user runs `email approve <draft_id>` or `email reject <draft_id>`.
-
-In a production deployment, this would publish to a webhook/notification
-channel (Slack, email) and poll for an async response.
 """
 from __future__ import annotations
 
-import asyncio
 import logging
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from src.workflow.engine.orchestrator import WorkflowContext
-
+from src.workflow.steps.base_step import BaseWorkflowStep
 from src.approval.gate import approval_gate
 from src.models.approval_record import ApprovalRecord
-from src.config.constants import ApprovalDecision
 from src.config.settings import settings
+
+if TYPE_CHECKING:
+    from src.models.workflow_context import WorkflowContext
 
 logger = logging.getLogger("email_assistant.workflow.steps.approval")
 
+class ApprovalStep(BaseWorkflowStep):
+    """Trình bản nháp cho con người duyệt và treo workflow đợi quyết định."""
 
-class ApprovalStep:
-    """Presents the draft for human review and waits for a decision."""
+    @property
+    def name(self) -> str:
+        return "approval_step"
 
-    async def run(self, ctx: "WorkflowContext") -> "WorkflowContext":
+    async def execute(self, ctx: "WorkflowContext") -> "WorkflowContext":
         if ctx.draft is None:
             raise ValueError("ApprovalStep: no draft in context")
 
@@ -48,6 +41,11 @@ class ApprovalStep:
             draft.draft_id, draft.draft_id, draft.draft_id,
         )
 
-        # Register with the global gate and wait for a decision
-        ctx.approval = await approval_gate.wait_for_decision(approval, draft)
+        # Chờ người duyệt
+        decision_record = await approval_gate.wait_for_decision(approval, draft)
+        
+        # Cập nhật ID và đối tượng vào Context
+        ctx.approval_record_id = decision_record.approval_id
+        ctx.metadata["approval_record"] = decision_record
+        
         return ctx
