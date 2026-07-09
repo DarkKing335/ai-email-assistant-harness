@@ -3,3 +3,4 @@ sample-projects/
 __pycache__/
 *.pyc
 .env
+credentials/*
