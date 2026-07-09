@@ -20,8 +20,8 @@ class DraftStep:
     def __init__(self, agent: Optional[EmailWritingAgent] = None) -> None:
         self._agent = agent or EmailWritingAgent()
 
-    async def execute(self, ctx: "WorkflowContext") -> "WorkflowContext":
-        if ctx.email_thread is None:
+    async def run(self, ctx: "WorkflowContext") -> "WorkflowContext":
+        if ctx.thread is None:
             raise ValueError("DraftStep: no email thread in context")
 
         ctx.draft = await self._agent.run(ctx.thread)
