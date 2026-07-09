@@ -9,6 +9,7 @@ from typing import Any, Dict, Optional
 from pydantic import BaseModel, Field
 
 from src.tools.base_tool import BaseTool
+from src.permissions.types import Action, Permission, ResourceType
 from src.integrations.gmail.draft_manager import DraftManager
 
 logger = logging.getLogger("email_assistant.tools.gmail_draft")
@@ -35,6 +36,7 @@ class GmailDraftTool(BaseTool):
         "Use this after you have composed the full reply body."
     )
     args_schema = GmailDraftSchema
+    required_permission = Permission(Action.DRAFT, ResourceType.DRAFT)
 
     def __init__(self, manager: Optional[DraftManager] = None) -> None:
         self._manager = manager or DraftManager()

@@ -57,6 +57,9 @@ class Settings(BaseSettings):
     gmail_redirect_uri: str = "http://localhost:8080/oauth/callback"
     gmail_credentials_path: str = "credentials/gmail_credentials.json"
     gmail_token_path: str = "credentials/gmail_token.json"
+    # Local port for the one-time OAuth callback server. 0 = auto-pick a free
+    # port (avoids conflicts, e.g. when Apache/XAMPP already holds 8080).
+    gmail_oauth_port: int = 0
     # The Gmail address the assistant operates on behalf of
     gmail_user_email: str = "me"
 
@@ -80,6 +83,26 @@ class Settings(BaseSettings):
 
     # ── Audit ─────────────────────────────────────────────────────────────────
     audit_log_path: str = "./data/audit/audit.jsonl"
+
+    # ── Guardrails ────────────────────────────────────────────────────────────
+    guardrails_enable_input: bool = True
+    guardrails_enable_output: bool = True
+    # Declarative rail policy (patterns, thresholds, per-rail enable/fail-mode).
+    # Relative paths resolve against the repo root. Absent → built-in defaults.
+    # Copy config/guardrails.example.yaml → config/guardrails.yaml to customise.
+    guardrails_policy_path: str = "config/guardrails.yaml"
+    # Hard timeout (seconds) for an LLM-judge rail before it fails open to ALLOW.
+    guardrails_llm_timeout: int = 15
+    # Comma-separated recipient domains that may be emailed WITHOUT extra approval.
+    # Empty → every recipient is treated as external and escalated to human review.
+    # (Draft length bounds live in the guardrail policy, not here — see policy.py.)
+    guardrails_allowed_recipient_domains: str = ""
+
+    @property
+    def allowed_recipient_domains(self) -> set[str]:
+        """Parse the comma-separated allowlist into a normalised set of domains."""
+        raw = self.guardrails_allowed_recipient_domains
+        return {d.strip().lower() for d in raw.split(",") if d.strip()}
 
     # ── Polling ───────────────────────────────────────────────────────────────
     # How often to poll Gmail inbox (seconds) when in polling mode

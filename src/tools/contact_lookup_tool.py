@@ -13,6 +13,7 @@ from typing import Any, Dict, Optional
 from pydantic import BaseModel, Field
 
 from src.tools.base_tool import BaseTool
+from src.permissions.types import Action, Permission, ResourceType
 
 logger = logging.getLogger("email_assistant.tools.contact_lookup")
 
@@ -59,6 +60,7 @@ class ContactLookupTool(BaseTool):
         "Call this before drafting a reply to personalise the response."
     )
     args_schema = ContactLookupSchema
+    required_permission = Permission(Action.LOOKUP, ResourceType.CONTACT)
 
     async def _run(self, email_address: str) -> Dict[str, Any]:
         normalised = email_address.lower().strip()

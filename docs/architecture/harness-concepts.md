@@ -39,11 +39,13 @@ This project is a reference implementation demonstrating key **Harness Engineeri
 **What it is:** A role-based access control (RBAC) system that determines what each actor is allowed to do before any action is executed.
 
 **Where it appears in this project:**
-- `src/permissions/engine.py` — Evaluates a (subject, action, resource) triple against loaded policies.
-- `src/permissions/policy.py` — Declarative policy definitions.
-- `src/permissions/role.py` — Role definitions: `operator`, `reviewer`, `admin`.
+- `src/permissions/engine.py` — Evaluates an `AccessRequest` (role, permission, scope) against the policy. Deny-by-default.
+- `src/permissions/policy.py` — Declarative role→permission grant table.
+- `src/permissions/types.py` — `Permission`, `Action`, `ResourceType`, `AccessRequest`, `PolicyDecision`.
+- `src/permissions/context.py` — The ambient acting principal (`acting_as(...)`), threaded via `contextvars`.
+- `src/tools/base_tool.py` — `_authorize()` consults the engine before every tool call. Each tool declares a `required_permission`.
 
-**Why it matters:** Prevents privilege escalation. An `operator` role can draft but not approve. A `reviewer` can approve but not configure system policies.
+**Why it matters:** Prevents privilege escalation. The drafting agent runs as `OPERATOR`, which is not granted `SEND:EMAIL` — so it physically cannot send, independently of the send tool being excluded from its tool list. Roles: `OPERATOR` (draft), `REVIEWER` (+send), `ADMIN` (+configure), `SYSTEM` (the trusted harness). See [ADR 0002](./adr/0002-guardrails-layer.md).
 
 ---
 
@@ -52,12 +54,16 @@ This project is a reference implementation demonstrating key **Harness Engineeri
 **What it is:** Automated checks that intercept and validate agent outputs before they reach the human reviewer or the send step.
 
 **Where it appears in this project:**
-- `src/guardrails/content_filter.py` — Blocks drafts with prohibited content.
-- `src/guardrails/pii_detector.py` — Detects and redacts PII before the draft is shown to a reviewer.
-- `src/guardrails/rate_limiter.py` — Prevents runaway LLM usage.
-- `src/guardrails/output_validator.py` — Ensures the draft meets format, length, and structural requirements.
+- `src/guardrails/pipeline.py` — Runs an ordered chain of rails, folds their verdicts (`BLOCK > REQUIRE_APPROVAL > TRANSFORM > ALLOW`), short-circuits on `BLOCK`, and audits every non-ALLOW result.
+- `src/guardrails/base.py` / `result.py` — The `Guardrail` contract and the typed verdict model.
+- `src/guardrails/rails/prompt_injection.py` — INPUT rail: neutralises indirect prompt injection in the untrusted inbound email and flags the draft for approval.
+- `src/guardrails/rails/banned_content.py` — OUTPUT rail: hard-blocks drafts leaking secrets/keys.
+- `src/guardrails/rails/pii_redactor.py` — OUTPUT transformer: redacts PII before the reviewer sees the draft.
+- `src/guardrails/rails/{format_validator,length_rail,recipient_allowlist}.py` — OUTPUT structural/recipient rails.
+- `src/guardrails/policy.py` + `config/guardrails.yaml` — config-driven patterns, thresholds, and per-rail enable/fail-mode.
+- `src/guardrails/llm_judge.py` + `rails/{grounding,injection_intent}.py` — opt-in LLM-as-judge rails (cached, fail-open, never blocking).
 
-**Why it matters:** Guardrails are the automated safety net that catches issues the human reviewer should not have to handle manually. They enforce non-negotiable system-level constraints.
+**Why it matters:** Guardrails are the automated safety net that catches issues the human reviewer should not have to handle manually. Validators (check-only) and transformers (mutate + audit) are kept strictly separate; every change is recorded. Deterministic rails are the safety baseline; LLM judges only ever escalate, and never gate. See [ADR 0002](./adr/0002-guardrails-layer.md).
 
 ---
 

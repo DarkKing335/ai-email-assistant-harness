@@ -96,13 +96,26 @@ def _display_result(ctx, elapsed: float) -> None:
     # Draft created
     if ctx.draft:
         draft = ctx.draft
+        body = (
+            f"[dim]To:[/]      {rich_escape(draft.to)}\n"
+            f"[dim]Subject:[/] {rich_escape(draft.subject)}\n\n"
+            f"{rich_escape(draft.preview)}..."
+        )
+
+        # Surface guardrail flags so the reviewer sees WHY approval is needed.
+        flags = list(ctx.metadata.get("guardrail_escalations", []))
+        if draft.pii_detected:
+            flags.append("PII redacted in body")
+        if flags:
+            body += "\n\n[bold yellow]⚠ Guardrail flags:[/]\n" + "\n".join(
+                f"  [yellow]•[/] {rich_escape(f)}" for f in flags
+            )
+
         console.print(
             Panel(
-                f"[dim]To:[/]      {rich_escape(draft.to)}\n"
-                f"[dim]Subject:[/] {rich_escape(draft.subject)}\n\n"
-                f"{rich_escape(draft.preview)}...",
+                body,
                 title=f"[bold {Colors.PRIMARY}]📝 Draft Generated[/]",
-                border_style=Colors.PRIMARY,
+                border_style=Colors.WARNING if flags else Colors.PRIMARY,
                 expand=False,
             )
         )

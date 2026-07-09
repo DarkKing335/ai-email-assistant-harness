@@ -113,7 +113,9 @@ def _run_oauth_flow() -> Optional["Credentials"]:
 
     try:
         flow = InstalledAppFlow.from_client_secrets_file(str(creds_path), GMAIL_SCOPES)
-        creds = flow.run_local_server(port=8080)
+        # port=0 lets the OS pick any free port; Desktop ("installed") OAuth
+        # clients accept the loopback redirect on any port, so this just works.
+        creds = flow.run_local_server(port=settings.gmail_oauth_port)
         _save_token(creds)
         logger.info("OAuth2 flow completed. Token saved.")
         return creds

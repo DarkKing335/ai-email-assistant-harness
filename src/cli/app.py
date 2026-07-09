@@ -113,19 +113,27 @@ def cmd_review() -> None:
         show_header=True,
         header_style=f"bold {Colors.PRIMARY}",
     )
-    table.add_column("Draft ID", style="dim", width=20)
-    table.add_column("To", width=25)
-    table.add_column("Subject", width=30)
-    table.add_column("Preview", width=40)
-    table.add_column("Requested At", width=20)
+    table.add_column("Draft ID", style="dim", width=18)
+    table.add_column("To", width=22)
+    table.add_column("Subject", width=24)
+    table.add_column("Preview", width=28)
+    table.add_column("⚠ Needs approval because", width=34)
 
     for item in pending:
+        flags = list(item.get("escalations", []))
+        if item.get("pii_detected"):
+            flags.append("PII redacted in body")
+        if flags:
+            flags_cell = "\n".join(f"[yellow]•[/] {f}" for f in flags)
+        else:
+            flags_cell = "[dim]— routine review[/]"
+
         table.add_row(
             item["draft_id"],
             item["to"],
             item["subject"],
             item["preview"],
-            item["requested_at"][:19],
+            flags_cell,
         )
 
     console.print()

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 import uuid
 
 from src.config.constants import ApprovalDecision
@@ -21,6 +21,10 @@ class ApprovalRecord:
     approval_id: str = field(default_factory=lambda: f"ap_{uuid.uuid4().hex[:16]}")
     draft_id: str = ""
     workflow_id: str = ""
+
+    # Why the human is being asked: guardrail rails that returned REQUIRE_APPROVAL
+    # (e.g. "recipient_allowlist: external recipient", "injection_escalation: ...").
+    escalations: List[str] = field(default_factory=list)
 
     # Decision
     decision: Optional[ApprovalDecision] = None

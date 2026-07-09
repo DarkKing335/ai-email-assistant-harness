@@ -86,3 +86,28 @@ def test_list_pending_empty():
     gate = ApprovalGate()
     assert gate.list_pending() == []
     assert gate.pending_count == 0
+
+
+@pytest.mark.asyncio
+async def test_list_pending_surfaces_guardrail_escalations():
+    """A pending draft must expose WHY it needs approval (guardrail reasons)."""
+    gate = ApprovalGate()
+    draft = _make_draft("dr_test_003")
+    draft.pii_detected = True
+    approval = ApprovalRecord(
+        draft_id=draft.draft_id,
+        workflow_id="wf_test_003",
+        escalations=["recipient_allowlist: external recipient example.com"],
+        timeout_at=datetime.utcnow() + timedelta(hours=1),
+    )
+
+    async def _inspect_then_approve():
+        await asyncio.sleep(0.05)
+        pending = gate.list_pending()
+        assert len(pending) == 1
+        assert pending[0]["escalations"] == ["recipient_allowlist: external recipient example.com"]
+        assert pending[0]["pii_detected"] is True
+        gate.approve(draft_id=draft.draft_id, reviewer="test_user")
+
+    asyncio.create_task(_inspect_then_approve())
+    await asyncio.wait_for(gate.wait_for_decision(approval, draft), timeout=2.0)
