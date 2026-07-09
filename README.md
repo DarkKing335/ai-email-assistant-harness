@@ -53,41 +53,6 @@ Tkinter ships with Python, so there is no extra GUI dependency.
 | **Audit** | The append-only audit log. Read-only — no edit, no delete |
 | **Config** | Environment, model, Gmail mode, reviewer. Never renders a secret |
 
-**The GUI is the only interface that can complete the approval loop.** The
-`ApprovalGate` holds pending decisions as in-memory `asyncio.Future` objects, so
-the workflow and the approving click must share one process and one event loop.
-`src/gui/bridge.py` pumps the asyncio loop from Tk's timer to guarantee that.
-
-There is deliberately **no Send button**. The reviewer approves; the orchestrator
-sends. `src/gui/` never imports `src.tools`, and
-`tests/unit/gui/test_layering.py` fails the build if it ever does.
-
-> **Authorise Gmail before a demo, not during one.** Without a saved token, the
-> OAuth browser flow fires inside `IngestStep` on the UI thread and freezes the
-> window. `python tools/generate_token.py` writes the token up front;
-> `--check` reports status without prompting.
-
----
-
-## Known limitations
-
-The workflow layer has defects that block end-to-end execution. They are written
-up with file and line numbers in
-[docs/architecture/gui-gateway-contract.md](docs/architecture/gui-gateway-contract.md) §6.
-
-- `orchestrator.run()` calls `step.run()`, but the steps define `execute()`.
-  Both `python -m src.cli email demo` and the GUI's **Start workflow** button
-  currently fail with `AttributeError: 'IngestStep' object has no attribute 'run'`.
-- Nothing sets `ctx.is_approved`, so an approved draft still routes to
-  `TERMINATED` and is never sent.
-- The tool registry is only populated by `src/cli/app.py`, not by the orchestrator.
-- **The CLI approval flow cannot work**: `email process` and `email approve` are
-  separate processes, each with its own in-memory gate, so the second one's
-  pending queue is always empty.
-
-Where data is unavailable, the GUI states the reason rather than rendering an
-empty panel.
-
 ---
 
 ## CLI Commands
