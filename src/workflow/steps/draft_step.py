@@ -1,107 +1,29 @@
 """
-draft_step.py — Generate an email draft using the LLM agent.
+draft_step.py - Workflow adapter for the email writing agent.
 """
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
-from src.workflow.steps.base_step import BaseWorkflowStep
-from src.models.draft import Draft
-from src.infrastructure.llm.llm_router import llm_router
-from src.tools.registry import tool_registry
+from src.agents.email_writing_agent import EmailWritingAgent
 
 if TYPE_CHECKING:
-    from src.models.workflow_context import WorkflowContext
+    from src.workflow.engine.orchestrator import WorkflowContext
 
 logger = logging.getLogger("email_assistant.workflow.steps.draft")
 
-_SYSTEM_PROMPT = """You are a professional email assistant. Your job is to draft clear, 
-concise, and appropriate email replies on behalf of the user.
 
-Guidelines:
-- Match the tone of the incoming email (formal if formal, friendly if friendly)
-- Be concise — no unnecessary filler phrases
-- Address all questions or points raised in the thread
-- Never invent facts; if you don't know something, say so politely
-- Do not include a greeting or signature — the user will add those
-"""
+class DraftStep:
+    """Delegates draft generation to the email writing agent."""
 
-class DraftStep(BaseWorkflowStep):
-    """Tạo bản nháp bằng LLM và Tool Registry."""
+    def __init__(self, agent: Optional[EmailWritingAgent] = None) -> None:
+        self._agent = agent or EmailWritingAgent()
 
-    @property
-    def name(self) -> str:
-        return "draft_step"
-
-    async def execute(self, ctx: "WorkflowContext") -> "WorkflowContext":
-        if ctx.email_thread is None:
+    async def run(self, ctx: "WorkflowContext") -> "WorkflowContext":
+        if ctx.thread is None:
             raise ValueError("DraftStep: no email thread in context")
 
-        thread = ctx.email_thread
-        latest = thread.latest_message
-        if latest is None:
-            raise ValueError("DraftStep: thread has no messages")
-
-        # ── 1. Optionally summarise long threads
-        thread_text = thread.full_text
-        if len(thread_text) > 3000 and "summarize_email_thread" in tool_registry:
-            logger.info("DraftStep: thread is long (%d chars) — summarising", len(thread_text))
-            summary_result = await tool_registry.call(
-                "summarize_email_thread",
-                thread_text=thread_text,
-            )
-            context_text = summary_result.get("summary", thread_text)
-        else:
-            context_text = thread_text
-
-        # ── 2. Look up contact context
-        contact_ctx = ""
-        if "lookup_contact" in tool_registry:
-            contact = await tool_registry.call(
-                "lookup_contact",
-                email_address=latest.sender_email,
-            )
-            if contact.get("found"):
-                contact_ctx = (
-                    f"\nContact context: {contact['name']} from {contact['company']}. "
-                    f"Notes: {contact.get('notes', '')}"
-                )
-
-        # ── 3. Draft via LLM
-        llm = llm_router.get_client("draft_email")
-        prompt = (
-            f"Please draft a reply to the following email thread.{contact_ctx}\n\n"
-            f"Thread:\n{context_text}\n\n"
-            f"The latest message is from {latest.sender} with subject: {latest.subject}\n\n"
-            "Write only the body of the reply — no greeting, no signature."
-        )
-
-        response = await llm.generate(prompt=prompt, system_message=_SYSTEM_PROMPT, temperature=0.3)
-        draft_body = response.content
-
-        # ── 4. Create draft domain object
-        draft = Draft(
-            email_message_id=latest.message_id,
-            thread_id=thread.thread_id,
-            subject=f"Re: {latest.subject}",
-            to=latest.sender_email,
-            body=draft_body,
-            guardrails_passed=False, 
-        )
-
-        # ── 5. Create draft in Gmail
-        if "gmail_create_or_update_draft" in tool_registry:
-            gmail_result = await tool_registry.call(
-                "gmail_create_or_update_draft",
-                to=draft.to,
-                subject=draft.subject,
-                body=draft.body,
-                thread_id=draft.thread_id,
-            )
-            draft.gmail_draft_id = gmail_result.get("gmail_draft_id")
-            logger.info("DraftStep: Gmail draft created: %s", draft.gmail_draft_id)
-
-        ctx.draft = draft
-        logger.info("DraftStep: draft generated (%d chars)", len(draft_body))
+        ctx.draft = await self._agent.run(ctx.thread)
+        logger.info("DraftStep: draft generated (%d chars)", len(ctx.draft.body))
         return ctx
