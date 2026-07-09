@@ -1,21 +1,18 @@
 """
 draft_step.py — Generate an email draft using the LLM agent.
-
-Implements a simple Plan→Execute→Reflect loop inspired by:
-  - agents-from-scratch: triage_router → response_agent flow
-  - Email-AI-Agent: supervisor with summarization + response nodes
 """
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from src.workflow.engine.orchestrator import WorkflowContext
-
+from src.workflow.steps.base_step import BaseWorkflowStep
 from src.models.draft import Draft
 from src.infrastructure.llm.llm_router import llm_router
 from src.tools.registry import tool_registry
+
+if TYPE_CHECKING:
+    from src.models.workflow_context import WorkflowContext
 
 logger = logging.getLogger("email_assistant.workflow.steps.draft")
 
@@ -30,20 +27,23 @@ Guidelines:
 - Do not include a greeting or signature — the user will add those
 """
 
+class DraftStep(BaseWorkflowStep):
+    """Tạo bản nháp bằng LLM và Tool Registry."""
 
-class DraftStep:
-    """Generates a draft reply using the LLM with tool support."""
+    @property
+    def name(self) -> str:
+        return "draft_step"
 
-    async def run(self, ctx: "WorkflowContext") -> "WorkflowContext":
-        if ctx.thread is None:
+    async def execute(self, ctx: "WorkflowContext") -> "WorkflowContext":
+        if ctx.email_thread is None:
             raise ValueError("DraftStep: no email thread in context")
 
-        thread = ctx.thread
+        thread = ctx.email_thread
         latest = thread.latest_message
         if latest is None:
             raise ValueError("DraftStep: thread has no messages")
 
-        # ── 1. Optionally summarise long threads ────────────────────────────
+        # ── 1. Optionally summarise long threads
         thread_text = thread.full_text
         if len(thread_text) > 3000 and "summarize_email_thread" in tool_registry:
             logger.info("DraftStep: thread is long (%d chars) — summarising", len(thread_text))
@@ -55,7 +55,7 @@ class DraftStep:
         else:
             context_text = thread_text
 
-        # ── 2. Look up contact context ─────────────────────────────────────
+        # ── 2. Look up contact context
         contact_ctx = ""
         if "lookup_contact" in tool_registry:
             contact = await tool_registry.call(
@@ -68,7 +68,7 @@ class DraftStep:
                     f"Notes: {contact.get('notes', '')}"
                 )
 
-        # ── 3. Draft via LLM ───────────────────────────────────────────────
+        # ── 3. Draft via LLM
         llm = llm_router.get_client("draft_email")
         prompt = (
             f"Please draft a reply to the following email thread.{contact_ctx}\n\n"
@@ -80,17 +80,17 @@ class DraftStep:
         response = await llm.generate(prompt=prompt, system_message=_SYSTEM_PROMPT, temperature=0.3)
         draft_body = response.content
 
-        # ── 4. Create draft domain object ─────────────────────────────────
+        # ── 4. Create draft domain object
         draft = Draft(
             email_message_id=latest.message_id,
             thread_id=thread.thread_id,
             subject=f"Re: {latest.subject}",
             to=latest.sender_email,
             body=draft_body,
-            guardrails_passed=False,  # Will be set by guardrails step
+            guardrails_passed=False, 
         )
 
-        # ── 5. Create draft in Gmail ───────────────────────────────────────
+        # ── 5. Create draft in Gmail
         if "gmail_create_or_update_draft" in tool_registry:
             gmail_result = await tool_registry.call(
                 "gmail_create_or_update_draft",

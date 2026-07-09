@@ -1,39 +1,39 @@
 """
-Workflow Steps — all five pipeline steps in one file for clarity.
-
-Each step is a thin class with a single async run() method.
-Steps delegate to services/integrations — they contain NO business logic themselves.
+ingest_step.py — Fetch and parse the Gmail thread into the workflow context.
 """
 from __future__ import annotations
 
 import logging
 from typing import TYPE_CHECKING
 
+from src.workflow.steps.base_step import BaseWorkflowStep
+
 if TYPE_CHECKING:
-    from src.workflow.engine.orchestrator import WorkflowContext
+    from src.models.workflow_context import WorkflowContext
 
-logger = logging.getLogger("email_assistant.workflow.steps")
+logger = logging.getLogger("email_assistant.workflow.steps.ingest")
 
-
-# ── Step 1: Ingest ────────────────────────────────────────────────────────────
-
-class IngestStep:
-    """Fetch and parse the Gmail thread into the workflow context."""
+class IngestStep(BaseWorkflowStep):
+    """Lấy và parse thread email từ Gmail vào workflow context."""
 
     def __init__(self) -> None:
         from src.integrations.gmail.thread_fetcher import ThreadFetcher
         self._fetcher = ThreadFetcher()
 
-    async def run(self, thread_id: str) -> "WorkflowContext":
-        from src.workflow.engine.orchestrator import WorkflowContext
-        ctx = WorkflowContext()
-        logger.info("IngestStep: fetching thread %s", thread_id)
-        thread = self._fetcher.fetch_thread(thread_id)
+    @property
+    def name(self) -> str:
+        return "ingest_step"
+
+    async def execute(self, ctx: "WorkflowContext") -> "WorkflowContext":
+        logger.info("IngestStep: fetching thread %s", ctx.thread_id)
+        
+        thread = self._fetcher.fetch_thread(ctx.thread_id)
         if thread is None or not thread.messages:
-            raise ValueError(f"Could not fetch thread: {thread_id}")
-        ctx.thread = thread
+            raise ValueError(f"Could not fetch thread: {ctx.thread_id}")
+            
+        ctx.email_thread = thread
         logger.info(
             "IngestStep: ingested thread %s (%d messages)",
-            thread_id, len(thread.messages),
+            ctx.thread_id, len(thread.messages),
         )
         return ctx
