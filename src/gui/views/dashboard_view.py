@@ -67,6 +67,9 @@ class DashboardView(ttk.Frame):
         if "→" in event.message:
             tag = "TRANSITION"
         self._append(f"{event.timestamp:%H:%M:%S}  {event.message}", tag)
+        
+        if "AWAITING_APPROVAL" in event.message:
+            self._append(f"{event.timestamp:%H:%M:%S}  👉 Bản nháp đã sẵn sàng! Vui lòng chuyển sang tab 'Approvals' để kiểm tra và duyệt.", "SUCCESS")
 
     def _on_done(self, task: asyncio.Task) -> None:
         if self._unsubscribe is not None:
