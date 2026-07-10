@@ -43,6 +43,10 @@ class EmailWorkflowOrchestrator:
         registry = build_default_guardrails()
         self._input_guardrails = registry.pipeline(GuardrailStage.INPUT)
         self._output_guardrails = registry.pipeline(GuardrailStage.OUTPUT)
+        
+        # BLOCKER-7: Initialise tool registry so the orchestrator is self-contained
+        from src.tools.registry import build_default_registry
+        build_default_registry()
 
     async def run(self, thread_id: str) -> WorkflowContext:
         """Execute the full email workflow for a given Gmail thread ID."""
@@ -75,6 +79,7 @@ class EmailWorkflowOrchestrator:
                 ctx.metadata["error"] = "; ".join(in_outcome.reasons(Verdict.BLOCK)) or "input guardrails blocked"
                 sm.transition(WorkflowStatus.GUARDRAILS_FAILED)
                 sm.transition(WorkflowStatus.TERMINATED)
+                ctx.status = sm.state
                 logger.warning("Workflow %s terminated by input guardrails", sm.workflow_id)
                 return ctx
 
@@ -98,6 +103,7 @@ class EmailWorkflowOrchestrator:
                 ctx.metadata["error"] = "; ".join(out_outcome.reasons(Verdict.BLOCK))
                 sm.transition(WorkflowStatus.GUARDRAILS_FAILED)
                 sm.transition(WorkflowStatus.TERMINATED)
+                ctx.status = sm.state
                 logger.warning("Workflow %s terminated: output guardrails blocked the draft", sm.workflow_id)
                 return ctx
             # Passed — surface any escalation reasons to the human reviewer.
@@ -123,6 +129,7 @@ class EmailWorkflowOrchestrator:
         else:
             sm.transition(WorkflowStatus.REJECTED)
             sm.transition(WorkflowStatus.TERMINATED)
+            ctx.status = sm.state
             logger.info("Workflow %s terminated: draft rejected", ctx.workflow_id)
             return ctx
 
@@ -137,6 +144,7 @@ class EmailWorkflowOrchestrator:
         ctx.metadata["history"] = sm.history()
         await self._audit.execute(ctx)
         sm.transition(WorkflowStatus.AUDITED)
+        ctx.status = sm.state
 
         logger.info("Workflow %s completed successfully", ctx.workflow_id)
         return ctx
@@ -166,4 +174,7 @@ class EmailWorkflowOrchestrator:
                 sm.transition(WorkflowStatus.ERROR)
             except WorkflowTransitionError:
                 pass
+        
+        # BLOCKER-1: Ensure context status reflects the state machine
+        ctx.status = sm.state
         return ctx

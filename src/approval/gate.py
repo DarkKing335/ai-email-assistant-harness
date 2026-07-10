@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Dict, List, Optional
 
 if TYPE_CHECKING:
     from src.models.draft import Draft
+    from src.models.email import EmailThread
 
 from src.models.approval_record import ApprovalRecord
 from src.config.constants import ApprovalDecision
@@ -31,11 +32,11 @@ class ApprovalGate:
     """Manages pending approval futures for in-flight workflows."""
 
     def __init__(self) -> None:
-        # Maps draft_id → (ApprovalRecord, Draft, asyncio.Future)
-        self._pending: Dict[str, tuple[ApprovalRecord, "Draft", asyncio.Future]] = {}
+        # Maps draft_id → (ApprovalRecord, Draft, EmailThread, asyncio.Future)
+        self._pending: Dict[str, tuple[ApprovalRecord, "Draft", "EmailThread", asyncio.Future]] = {}
 
     async def wait_for_decision(
-        self, approval: ApprovalRecord, draft: "Draft"
+        self, approval: ApprovalRecord, draft: "Draft", thread: "EmailThread"
     ) -> ApprovalRecord:
         """Register a pending approval and suspend until a decision is made.
 
@@ -44,7 +45,7 @@ class ApprovalGate:
         """
         loop = asyncio.get_event_loop()
         future: asyncio.Future = loop.create_future()
-        self._pending[draft.draft_id] = (approval, draft, future)
+        self._pending[draft.draft_id] = (approval, draft, thread, future)
 
         logger.info(
             "Approval gate: draft %s registered. "
@@ -65,7 +66,7 @@ class ApprovalGate:
         entry = self._pending.get(draft_id)
         if entry is None:
             return False
-        approval, _, future = entry
+        approval, _, _, future = entry
         from datetime import datetime, timezone
         approval.decision = ApprovalDecision.APPROVED
         approval.reviewer = reviewer
@@ -81,7 +82,7 @@ class ApprovalGate:
         entry = self._pending.get(draft_id)
         if entry is None:
             return False
-        approval, _, future = entry
+        approval, _, _, future = entry
         from datetime import datetime, timezone
         approval.decision = ApprovalDecision.REJECTED
         approval.reviewer = reviewer
@@ -95,7 +96,7 @@ class ApprovalGate:
     def list_pending(self) -> List[Dict]:
         """Return all pending approvals for the CLI `review` command."""
         result = []
-        for draft_id, (approval, draft, _) in self._pending.items():
+        for draft_id, (approval, draft, _, _) in self._pending.items():
             result.append({
                 "draft_id": draft_id,
                 "to": draft.to,
@@ -108,6 +109,14 @@ class ApprovalGate:
                 "pii_detected": draft.pii_detected,
             })
         return result
+
+    def get_pending(self, draft_id: str) -> Optional[tuple[ApprovalRecord, "Draft", "EmailThread"]]:
+        """Return the full details of a pending approval (BLOCKER-2 & BLOCKER-3)."""
+        entry = self._pending.get(draft_id)
+        if entry is None:
+            return None
+        approval, draft, thread, _ = entry
+        return approval, draft, thread
 
     @property
     def pending_count(self) -> int:

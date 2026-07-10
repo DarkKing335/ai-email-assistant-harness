@@ -279,6 +279,7 @@ class Gateway:
         )
 
     def _to_pending_item(self, raw: dict) -> PendingItem:
+        draft, thread = self._full_draft_and_thread(raw["draft_id"])
         return PendingItem(
             draft_id=raw["draft_id"],
             to=raw.get("to", ""),
@@ -286,29 +287,28 @@ class Gateway:
             preview=raw.get("preview", ""),
             requested_at=_parse_iso(raw.get("requested_at")),
             timeout_at=_parse_iso(raw.get("timeout_at")),
-            draft=self._full_draft(raw["draft_id"]),
-            thread=None,  # BLOCKER-3: the gate never stores the EmailThread
+            draft=draft,
+            thread=thread,
         )
 
-    def _full_draft(self, draft_id: str) -> Optional[Draft]:
-        """Fetch the full Draft, if the gate has learned how to expose it.
-
-        Duck-typed on purpose. Today ``ApprovalGate`` has no ``get_pending``, so
-        this returns None (BLOCKER-2). The day it grows one returning
-        ``(ApprovalRecord, Draft)``, full bodies light up with no change here.
-        """
+    def _full_draft_and_thread(self, draft_id: str) -> tuple[Optional[Draft], Optional[Any]]:
+        """Fetch the full Draft and EmailThread if the gate exposes them."""
         getter = getattr(self._gate, "get_pending", None)
         if getter is None:
-            return None
+            return None, None
         try:
             entry = getter(draft_id)
+            if not entry:
+                return None, None
+            if len(entry) == 3:
+                _, draft, thread = entry
+                return draft, thread
+            elif len(entry) == 2:
+                _, draft = entry
+                return draft, None
         except Exception as exc:
             logger.warning("gate.get_pending(%s) failed: %s", draft_id, exc)
-            return None
-        if not entry:
-            return None
-        _, draft = entry
-        return draft
+        return None, None
 
 
 # ── Module helpers ────────────────────────────────────────────────────────────

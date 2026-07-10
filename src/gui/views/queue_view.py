@@ -54,8 +54,14 @@ class QueueView(ttk.Frame):
         self._badge = ttk.Label(right, text="")
         self._badge.pack(anchor=tk.W, pady=(0, 6))
 
-        self._body = tk.Text(right, height=12, wrap=tk.WORD, state=tk.DISABLED)
-        self._body.pack(fill=tk.BOTH, expand=True)
+        self._notebook = ttk.Notebook(right)
+        self._notebook.pack(fill=tk.BOTH, expand=True)
+
+        self._body = tk.Text(self._notebook, height=12, wrap=tk.WORD, state=tk.DISABLED)
+        self._notebook.add(self._body, text="Proposed Draft")
+
+        self._thread_text = tk.Text(self._notebook, height=12, wrap=tk.WORD, state=tk.DISABLED)
+        self._notebook.add(self._thread_text, text="Original Thread")
 
         self._caveats = ttk.Label(right, text="", foreground=Colors.WARNING, wraplength=440)
         self._caveats.pack(anchor=tk.W, pady=(6, 0))
@@ -125,6 +131,9 @@ class QueueView(ttk.Frame):
         body = row["body"] if row["body"] is not None else row["preview"]
         self._set_body(body)
 
+        thread_text = row.get("thread_text") or ""
+        self._set_thread_text(thread_text)
+
         caveats = [c for c in (row["body_unavailable_reason"], row["thread_unavailable_reason"]) if c]
         self._caveats.configure(text="\n".join(caveats))
         self._set_buttons(enabled=True)
@@ -134,6 +143,7 @@ class QueueView(ttk.Frame):
         self._to.configure(text="")
         self._badge.configure(text="")
         self._set_body("")
+        self._set_thread_text("")
         self._caveats.configure(text="")
         self._set_buttons(enabled=False)
 
@@ -142,6 +152,12 @@ class QueueView(ttk.Frame):
         self._body.delete("1.0", tk.END)
         self._body.insert("1.0", text)
         self._body.configure(state=tk.DISABLED)
+
+    def _set_thread_text(self, text: str) -> None:
+        self._thread_text.configure(state=tk.NORMAL)
+        self._thread_text.delete("1.0", tk.END)
+        self._thread_text.insert("1.0", text)
+        self._thread_text.configure(state=tk.DISABLED)
 
     def _set_buttons(self, *, enabled: bool) -> None:
         can_approve = enabled and self._gateway.session.can_approve()

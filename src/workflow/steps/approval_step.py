@@ -60,7 +60,7 @@ class ApprovalStep(BaseWorkflowStep):
         )
 
         # Chờ người duyệt
-        decision_record = await approval_gate.wait_for_decision(approval, draft)
+        decision_record = await approval_gate.wait_for_decision(approval, draft, ctx.email_thread)
         
         # Cập nhật ID và đối tượng vào Context
         ctx.approval_record_id = decision_record.approval_id

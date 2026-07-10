@@ -20,6 +20,7 @@ from src.infrastructure.llm.llm_client import (
     GeminiLLMClient,
     LLMClient,
     OpenAILLMClient,
+    FallbackLLMClient,
 )
 
 logger = logging.getLogger("email_assistant.llm_router")
@@ -40,19 +41,30 @@ class LLMRouter:
 
         if provider == "openai":
             # Primary — most capable model for complex tasks
-            self._clients["primary"] = OpenAILLMClient(
+            primary_openai = OpenAILLMClient(
                 model_name=settings.llm_model_draft,
-                api_key=api_key,
+                api_key=settings.openai_api_key,
                 timeout=settings.llm_request_timeout,
                 max_retries=settings.llm_max_retries,
             )
+            primary_gemini = GeminiLLMClient(
+                model_name="gemini-2.5-pro",
+                api_key=settings.gemini_api_key,
+            )
+            self._clients["primary"] = FallbackLLMClient([primary_openai, primary_gemini])
+            
             # Secondary — faster/cheaper model for simple tasks
-            self._clients["secondary"] = OpenAILLMClient(
+            secondary_openai = OpenAILLMClient(
                 model_name=settings.llm_model_summarize,
-                api_key=api_key,
+                api_key=settings.openai_api_key,
                 timeout=settings.llm_request_timeout,
                 max_retries=settings.llm_max_retries,
             )
+            secondary_gemini = GeminiLLMClient(
+                model_name="gemini-2.5-flash",
+                api_key=settings.gemini_api_key,
+            )
+            self._clients["secondary"] = FallbackLLMClient([secondary_openai, secondary_gemini])
         elif provider == "gemini":
             self._clients["primary"] = GeminiLLMClient(
                 model_name=settings.llm_model_draft,

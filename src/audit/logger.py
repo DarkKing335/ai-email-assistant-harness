@@ -89,6 +89,7 @@ class AuditLogger:
                         outcome=data.get("outcome", ""),
                         detail=data.get("detail"),
                         metadata=data.get("metadata", {}),
+                        timestamp=datetime.fromisoformat(data["timestamp"]) if "timestamp" in data else datetime.now(timezone.utc),
                     )
                 )
         except Exception as e:

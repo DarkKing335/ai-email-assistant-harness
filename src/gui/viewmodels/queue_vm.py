@@ -40,6 +40,7 @@ def pending_to_dict(item: PendingItem) -> dict[str, Any]:
         "guardrail_state": draft["guardrail_state"] if draft else None,
         "guardrail_label": draft["guardrail_label"] if draft else None,
         "thread_available": item.thread is not None,
+        "thread_text": getattr(item.thread, "full_text", "") if item.thread else None,
         "thread_unavailable_reason": None if item.thread else THREAD_UNAVAILABLE_REASON,
     }
 

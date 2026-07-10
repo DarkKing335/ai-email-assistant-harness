@@ -40,7 +40,11 @@ class DashboardView(ttk.Frame):
         self._status.pack(fill=tk.X, pady=(10, 4))
 
         ttk.Label(self, text="Progress").pack(anchor=tk.W)
-        self._log = ScrolledText(self, height=18, state=tk.DISABLED, wrap=tk.WORD)
+        self._log = ScrolledText(self, height=18, state=tk.DISABLED, wrap=tk.WORD, font=("Consolas", 10))
+        self._log.tag_config("ERROR", foreground=Colors.ERROR, font=("Consolas", 10, "bold"))
+        self._log.tag_config("WARNING", foreground=Colors.WARNING, font=("Consolas", 10, "italic"))
+        self._log.tag_config("INFO", foreground=Colors.TEXT)
+        self._log.tag_config("TRANSITION", foreground=Colors.PRIMARY_DARK, font=("Consolas", 10, "bold"))
         self._log.pack(fill=tk.BOTH, expand=True, pady=(2, 0))
 
     # ── Actions ───────────────────────────────────────────────────────────────
@@ -59,7 +63,10 @@ class DashboardView(ttk.Frame):
         self._bridge.submit(self._gateway.start_workflow(thread_id), on_done=self._on_done)
 
     def _on_progress(self, event) -> None:
-        self._append(f"{event.timestamp:%H:%M:%S}  {event.message}")
+        tag = event.level
+        if "→" in event.message:
+            tag = "TRANSITION"
+        self._append(f"{event.timestamp:%H:%M:%S}  {event.message}", tag)
 
     def _on_done(self, task: asyncio.Task) -> None:
         if self._unsubscribe is not None:
@@ -76,7 +83,7 @@ class DashboardView(ttk.Frame):
             # Every workflow lands here today: orchestrator.py:48 raises
             # AttributeError because the steps expose execute(), not run().
             self._set_status(f"Workflow failed: {type(error).__name__}: {error}", Colors.ERROR)
-            self._append(f"\nERROR  {type(error).__name__}: {error}")
+            self._append(f"\nERROR  {type(error).__name__}: {error}", "ERROR")
             return
 
         result = task.result()
@@ -92,9 +99,9 @@ class DashboardView(ttk.Frame):
     def _set_status(self, text: str, color: str) -> None:
         self._status.configure(text=text, foreground=color)
 
-    def _append(self, line: str) -> None:
+    def _append(self, line: str, tag: str = "INFO") -> None:
         self._log.configure(state=tk.NORMAL)
-        self._log.insert(tk.END, line + "\n")
+        self._log.insert(tk.END, line + "\n", tag)
         self._log.see(tk.END)
         self._log.configure(state=tk.DISABLED)
 

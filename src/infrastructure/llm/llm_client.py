@@ -87,6 +87,45 @@ class LLMClient:
         raise last_exc
 
 
+class FallbackLLMClient(LLMClient):
+    """Wraps multiple LLM clients and falls back sequentially on failure (e.g. 429 Quota Exceeded)."""
+
+    def __init__(self, clients: List[LLMClient]) -> None:
+        if not clients:
+            raise ValueError("FallbackLLMClient requires at least one client")
+        self.clients = clients
+        self.provider = "fallback"
+
+    async def generate(self, *args, **kwargs) -> LLMResponse:
+        last_exc = None
+        for client in self.clients:
+            try:
+                # Bỏ qua client nếu API key rỗng để tránh log lỗi vô nghĩa
+                if not getattr(client, "api_key", True):
+                    continue
+                return await client.generate(*args, **kwargs)
+            except Exception as e:
+                # Bắt mọi lỗi (ví dụ: openai.RateLimitError / 429) và chuyển sang client tiếp theo
+                last_exc = e
+                logger.warning(
+                    "LLM client %s failed (%s). Falling back to next provider...",
+                    client.__class__.__name__,
+                    e,
+                )
+        
+        # Nếu tất cả client đều lỗi, ném lỗi cuối cùng
+        if last_exc:
+            raise last_exc
+        
+        # Fallback an toàn (mock) nếu không có client nào hợp lệ
+        await asyncio.sleep(0.1)
+        return LLMResponse(
+            content=f"[MOCK FALLBACK] Reply generated via fallback",
+            model="fallback-mock",
+            provider="mock",
+        )
+
+
 class OpenAILLMClient(LLMClient):
     """OpenAI implementation.
 
@@ -105,6 +144,10 @@ class OpenAILLMClient(LLMClient):
     ) -> None:
         super().__init__(model_name, api_key, timeout, max_retries)
         self._client = None
+        if not api_key:
+            logger.warning("OpenAI API key is empty — using mock LLM responses")
+            return
+            
         try:
             import openai
             self._client = openai.AsyncOpenAI(api_key=api_key, timeout=timeout)
@@ -184,13 +227,17 @@ class GeminiLLMClient(LLMClient):
 
     def __init__(
         self,
-        model_name: str = "gemini-1.5-flash",
+        model_name: str = "gemini-2.5-flash",
         api_key: str = "",
         timeout: int = 30,
         max_retries: int = 3,
     ) -> None:
         super().__init__(model_name, api_key, timeout, max_retries)
         self._genai = None
+        if not api_key:
+            logger.warning("Gemini API key is empty — using mock Gemini responses")
+            return
+            
         try:
             import google.generativeai as genai
             genai.configure(api_key=api_key)
