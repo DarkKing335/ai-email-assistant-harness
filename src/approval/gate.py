@@ -66,11 +66,11 @@ class ApprovalGate:
         if entry is None:
             return False
         approval, _, future = entry
-        from datetime import datetime
+        from datetime import datetime, timezone
         approval.decision = ApprovalDecision.APPROVED
         approval.reviewer = reviewer
         approval.comments = comments
-        approval.decided_at = datetime.utcnow()
+        approval.decided_at = datetime.now(timezone.utc)
         if not future.done():
             future.set_result(approval)
         logger.info("Approval gate: draft %s APPROVED by %s", draft_id, reviewer)
@@ -82,11 +82,11 @@ class ApprovalGate:
         if entry is None:
             return False
         approval, _, future = entry
-        from datetime import datetime
+        from datetime import datetime, timezone
         approval.decision = ApprovalDecision.REJECTED
         approval.reviewer = reviewer
         approval.comments = reason
-        approval.decided_at = datetime.utcnow()
+        approval.decided_at = datetime.now(timezone.utc)
         if not future.done():
             future.set_result(approval)
         logger.info("Approval gate: draft %s REJECTED by %s", draft_id, reviewer)

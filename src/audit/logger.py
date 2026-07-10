@@ -14,7 +14,7 @@ import asyncio
 import json
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -54,7 +54,7 @@ class AuditLogger:
             outcome=outcome,
             detail=detail,
             metadata=metadata or {},
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
 
         async with self._lock:

@@ -7,7 +7,7 @@ Inspired by deliberate's Approval model, simplified to remove DB coupling.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 import uuid
 
@@ -32,7 +32,7 @@ class ApprovalRecord:
     comments: Optional[str] = None
 
     # Timing
-    requested_at: datetime = field(default_factory=datetime.utcnow)
+    requested_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     decided_at: Optional[datetime] = None
     timeout_at: Optional[datetime] = None
 

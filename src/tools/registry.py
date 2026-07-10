@@ -25,6 +25,7 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from src.tools.base_tool import BaseTool, ToolError
+from src.tools.proxy import tool_proxy
 
 logger = logging.getLogger("email_assistant.tools.registry")
 
@@ -67,11 +68,12 @@ class ToolRegistry:
         return [t.to_llm_dict() for t in self.get_agent_tools(exclude_approval_required)]
 
     async def call(self, name: str, **kwargs: Any) -> Any:
-        """Look up and invoke a registered tool by name."""
+        """Look up and invoke a registered tool by name via the Proxy Layer."""
         tool = self._tools.get(name)
         if tool is None:
             raise ToolError(f"Tool '{name}' not found in registry")
-        return await tool(**kwargs)
+        # Route through the proxy (Proxy Layer) for audit, rate-limiting, etc.
+        return await tool_proxy.call(tool, **kwargs)
 
     def list_names(self) -> List[str]:
         """Return all registered tool names."""

@@ -4,7 +4,7 @@ approval_step.py — Human-in-the-loop approval gate.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
 
 from src.workflow.steps.base_step import BaseWorkflowStep
@@ -36,7 +36,7 @@ class ApprovalStep(BaseWorkflowStep):
             draft_id=draft.draft_id,
             workflow_id=ctx.workflow_id,
             escalations=escalations,
-            timeout_at=datetime.utcnow() + timedelta(seconds=settings.approval_timeout_seconds),
+            timeout_at=datetime.now(timezone.utc) + timedelta(seconds=settings.approval_timeout_seconds),
         )
 
         logger.info(

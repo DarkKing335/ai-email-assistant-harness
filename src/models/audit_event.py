@@ -8,7 +8,7 @@ to create a tamper-evident audit trail. Simplified here to a flat dataclass.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 import uuid
 
@@ -32,7 +32,7 @@ class AuditEvent:
     outcome: str = "SUCCESS"                 # "SUCCESS" | "FAILURE"
     detail: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def to_dict(self) -> Dict[str, Any]:
         return {

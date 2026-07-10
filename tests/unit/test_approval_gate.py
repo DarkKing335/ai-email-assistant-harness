@@ -3,7 +3,7 @@ tests/unit/test_approval_gate.py — Unit tests for the HITL approval gate.
 """
 import asyncio
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from src.approval.gate import ApprovalGate
 from src.models.approval_record import ApprovalRecord
@@ -26,7 +26,7 @@ def _make_approval(draft_id: str = "dr_test_001") -> ApprovalRecord:
     return ApprovalRecord(
         draft_id=draft_id,
         workflow_id="wf_test_001",
-        timeout_at=datetime.utcnow() + timedelta(hours=1),
+        timeout_at=datetime.now(timezone.utc) + timedelta(hours=1),
     )
 
 
@@ -98,7 +98,7 @@ async def test_list_pending_surfaces_guardrail_escalations():
         draft_id=draft.draft_id,
         workflow_id="wf_test_003",
         escalations=["recipient_allowlist: external recipient example.com"],
-        timeout_at=datetime.utcnow() + timedelta(hours=1),
+        timeout_at=datetime.now(timezone.utc) + timedelta(hours=1),
     )
 
     async def _inspect_then_approve():
