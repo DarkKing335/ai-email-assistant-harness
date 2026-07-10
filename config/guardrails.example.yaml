@@ -1,0 +1,110 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Guardrail Policy — example / reference
+#
+# Copy this file to `config/guardrails.yaml` to activate it:
+#     cp config/guardrails.example.yaml config/guardrails.yaml
+#
+# The path is configurable via GUARDRAILS_POLICY_PATH (see src/config/settings.py).
+# If no active file exists, the built-in defaults in src/guardrails/policy.py
+# apply — which are identical to the values below, so this file is a no-op until
+# you change something.
+#
+# OVERRIDE SEMANTICS: each top-level section you include fully REPLACES that
+# section's default. Omit a section to keep its defaults. (This is section-level
+# replace, not deep merge — so if you set `banned_content`, list ALL patterns you
+# want, not just additions.)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Draft body length bounds (OUTPUT: length_rail → REQUIRE_APPROVAL when tripped).
+length:
+  min_chars: 10
+  max_chars: 5000
+
+# Recipient allow-list (OUTPUT: recipient_allowlist).
+#   - Omit this section (or leave allowed_domains empty) to fall back to the
+#     env var GUARDRAILS_ALLOWED_RECIPIENT_DOMAINS (recommended for secrets/CI).
+#   - Any recipient whose domain is NOT listed is escalated to human approval.
+# recipient:
+#   allowed_domains:
+#     - acme.com
+#     - partner.io
+
+# Secrets / credentials that must never leave in an email (OUTPUT: banned_content
+# → BLOCK). Keep patterns high-precision to avoid false blocks.
+banned_content:
+  - label: OpenAI API key
+    pattern: 'sk-[A-Za-z0-9]{20,}'
+  - label: Google API key
+    pattern: 'AIza[0-9A-Za-z\-_]{20,}'
+  - label: AWS access key
+    pattern: 'AKIA[0-9A-Z]{16}'
+  - label: private key block
+    pattern: '-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----'
+  - label: bearer token
+    pattern: '\b[Bb]earer\s+[A-Za-z0-9\-._~+/]{20,}'
+  - label: password disclosure
+    pattern: '\bpassword\s*[:=]\s*\S+'
+    ignorecase: true
+
+# PII to redact before the reviewer sees the draft (OUTPUT: pii_redactor →
+# TRANSFORM). `replacement` is the marker substituted in place.
+pii:
+  - label: credit card
+    pattern: '\b(?:\d[ -]?){13,16}\b'
+    replacement: '[REDACTED_CC]'
+  - label: ssn
+    pattern: '\b\d{3}-\d{2}-\d{4}\b'
+    replacement: '[REDACTED_SSN]'
+  - label: iban
+    pattern: '\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b'
+    replacement: '[REDACTED_IBAN]'
+
+# Indirect prompt-injection markers in the INBOUND email (INPUT: prompt_injection
+# → neutralised in place + draft escalated to approval).
+injection:
+  - label: ignore-previous
+    pattern: 'ignore\s+(?:all\s+)?(?:the\s+)?(?:previous|above|prior)\s+instructions?'
+    ignorecase: true
+  - label: disregard
+    pattern: 'disregard\s+(?:all\s+)?(?:the\s+)?(?:previous|above|system)'
+    ignorecase: true
+  - label: you-are-now
+    pattern: 'you\s+are\s+now\s+(?:a|an|acting)'
+    ignorecase: true
+  - label: new-instructions
+    pattern: 'new\s+(?:instructions?|system\s+prompt)\s*[:\-]'
+    ignorecase: true
+  - label: fake-role-tags
+    pattern: '</?(?:system|assistant|user)\s*>'
+    ignorecase: true
+  - label: system-prompt
+    pattern: '\bsystem\s+prompt\b'
+    ignorecase: true
+  - label: reveal
+    pattern: 'reveal\s+(?:your\s+)?(?:system\s+prompt|instructions|api\s+key)'
+    ignorecase: true
+  - label: redirect-send
+    pattern: 'send\s+(?:an?\s+)?email\s+to\b'
+    ignorecase: true
+
+# Per-rail runtime overrides. Turn a rail off, or change its failure behaviour
+# (open = allow on error, closed = block on error). Any rail not listed keeps
+# its code default.
+rails:
+  prompt_injection:     { enabled: true,  fail_mode: closed }
+  format_validator:     { enabled: true,  fail_mode: closed }
+  banned_content:       { enabled: true,  fail_mode: closed }
+  length_rail:          { enabled: true,  fail_mode: open }
+  pii_redactor:         { enabled: true,  fail_mode: open }
+  recipient_allowlist:  { enabled: true,  fail_mode: closed }
+  injection_escalation: { enabled: true,  fail_mode: open }
+
+  # ── LLM-judge rails (Phase 5) ──────────────────────────────────────────────
+  # OPT-IN: these are OFF unless you enable them here, and they need a working
+  # LLM API key. They call the model per draft/email (cached), are fail-open
+  # (never block — the strongest action is REQUIRE_APPROVAL), and complement —
+  # never replace — the deterministic rails above.
+  #   grounding_rail   — OUTPUT: flags draft claims unsupported by the thread.
+  #   injection_intent — INPUT:  semantic backstop to prompt_injection.
+  grounding_rail:       { enabled: false, fail_mode: open }
+  injection_intent:     { enabled: false, fail_mode: open }

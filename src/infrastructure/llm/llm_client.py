@@ -173,9 +173,31 @@ class OpenAILLMClient(LLMClient):
 
 
 class GeminiLLMClient(LLMClient):
-    """Google Gemini implementation (placeholder)."""
+    """Google Gemini implementation (has a genuinely free API tier).
+
+    Install: pip install google-generativeai
+    Falls back to a mock response if the library is not installed, so the rest
+    of the system keeps working without it.
+    """
 
     provider = "gemini"
+
+    def __init__(
+        self,
+        model_name: str = "gemini-1.5-flash",
+        api_key: str = "",
+        timeout: int = 30,
+        max_retries: int = 3,
+    ) -> None:
+        super().__init__(model_name, api_key, timeout, max_retries)
+        self._genai = None
+        try:
+            import google.generativeai as genai
+            genai.configure(api_key=api_key)
+            self._genai = genai
+            logger.info("Gemini client initialised (model=%s)", model_name)
+        except ImportError:
+            logger.warning("google-generativeai not installed — using mock Gemini responses")
 
     async def generate(
         self,
@@ -184,10 +206,39 @@ class GeminiLLMClient(LLMClient):
         tools: Optional[List[Dict[str, Any]]] = None,
         temperature: float = 0.2,
     ) -> LLMResponse:
-        # Placeholder — install google-generativeai to implement
-        logger.warning("Gemini client not yet implemented — using mock")
+        start = time.perf_counter()
+
+        if self._genai is None:
+            await asyncio.sleep(0.1)
+            return LLMResponse(
+                content=f"[MOCK GEMINI] Reply for: {prompt[:60]}",
+                model=self.model_name,
+                provider=self.provider,
+                latency_ms=(time.perf_counter() - start) * 1000,
+            )
+
+        model = self._genai.GenerativeModel(
+            self.model_name,
+            system_instruction=system_message or None,
+        )
+
+        async def _call():
+            return await model.generate_content_async(
+                prompt,
+                generation_config={"temperature": temperature},
+            )
+
+        response = await self._with_retry(_call)
+        elapsed = (time.perf_counter() - start) * 1000
+
+        content = (getattr(response, "text", None) or "").strip()
+        usage = getattr(response, "usage_metadata", None)
+
         return LLMResponse(
-            content=f"[MOCK GEMINI] Reply for: {prompt[:60]}",
+            content=content,
             model=self.model_name,
             provider=self.provider,
+            input_tokens=getattr(usage, "prompt_token_count", 0) if usage else 0,
+            output_tokens=getattr(usage, "candidates_token_count", 0) if usage else 0,
+            latency_ms=elapsed,
         )

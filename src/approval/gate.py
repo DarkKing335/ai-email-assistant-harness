@@ -103,6 +103,9 @@ class ApprovalGate:
                 "preview": draft.preview,
                 "requested_at": approval.requested_at.isoformat(),
                 "timeout_at": approval.timeout_at.isoformat() if approval.timeout_at else None,
+                # Why the reviewer is being asked (guardrail escalations + PII flag).
+                "escalations": list(approval.escalations),
+                "pii_detected": draft.pii_detected,
             })
         return result
 

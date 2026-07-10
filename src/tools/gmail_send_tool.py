@@ -15,6 +15,7 @@ from typing import Any, Dict, Optional
 from pydantic import BaseModel, Field
 
 from src.tools.base_tool import BaseTool
+from src.permissions.types import Action, Permission, ResourceType
 from src.integrations.gmail.sender import GmailSender
 
 logger = logging.getLogger("email_assistant.tools.gmail_send")
@@ -39,6 +40,9 @@ class GmailSendTool(BaseTool):
     )
     args_schema = GmailSendSchema
     requires_approval = True  # Excluded from agent tool list
+    # SEND is granted to REVIEWER/ADMIN/SYSTEM only — an OPERATOR (the role the
+    # drafting agent runs under) is denied even if it somehow reaches this tool.
+    required_permission = Permission(Action.SEND, ResourceType.EMAIL)
 
     def __init__(self, sender: Optional[GmailSender] = None) -> None:
         self._sender = sender or GmailSender()

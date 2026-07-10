@@ -31,6 +31,8 @@ VALID_TRANSITIONS: Set[tuple[WorkflowStatus, WorkflowStatus]] = {
     # Happy path
     (WorkflowStatus.RECEIVED,           WorkflowStatus.INGESTED),
     (WorkflowStatus.INGESTED,           WorkflowStatus.DRAFTED),
+    # Input guardrails may fail before a draft is ever produced.
+    (WorkflowStatus.INGESTED,           WorkflowStatus.GUARDRAILS_FAILED),
     (WorkflowStatus.DRAFTED,            WorkflowStatus.GUARDRAILS_PASSED),
     (WorkflowStatus.DRAFTED,            WorkflowStatus.GUARDRAILS_FAILED),
     (WorkflowStatus.GUARDRAILS_PASSED,  WorkflowStatus.AWAITING_APPROVAL),

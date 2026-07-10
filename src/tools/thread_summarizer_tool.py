@@ -15,6 +15,7 @@ from typing import Any, Dict
 from pydantic import BaseModel, Field
 
 from src.tools.base_tool import BaseTool
+from src.permissions.types import Action, Permission, ResourceType
 from src.infrastructure.llm.llm_router import llm_router
 
 logger = logging.getLogger("email_assistant.tools.summarizer")
@@ -46,6 +47,7 @@ class ThreadSummarizerTool(BaseTool):
         "Returns a concise bullet-point summary."
     )
     args_schema = SummarizerSchema
+    required_permission = Permission(Action.SUMMARIZE, ResourceType.THREAD)
 
     async def _run(self, thread_text: str, max_summary_words: int = 150) -> Dict[str, Any]:
         llm = llm_router.get_client("summarize")

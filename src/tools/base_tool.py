@@ -17,9 +17,12 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Type
+from typing import TYPE_CHECKING, Any, ClassVar, Dict, List, Optional, Type
 
 from pydantic import BaseModel
+
+if TYPE_CHECKING:
+    from src.permissions.types import Permission
 
 logger = logging.getLogger("email_assistant.tools")
 
@@ -57,6 +60,10 @@ class BaseTool(ABC):
     # Tools with requires_approval=True cannot be called without an approval record
     requires_approval: bool = False
 
+    # RUNTIME guardrail: the capability the caller must hold to invoke this tool.
+    # None → no authorization required (backwards-compatible default).
+    required_permission: ClassVar[Optional["Permission"]] = None
+
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
         for attr in ("name", "description", "args_schema"):
@@ -64,8 +71,9 @@ class BaseTool(ABC):
                 raise TypeError(f"Tool '{cls.__name__}' must define '{attr}'")
 
     async def __call__(self, **kwargs: Any) -> Any:
-        """Validate inputs and execute the tool."""
+        """Authorize, validate inputs, and execute the tool."""
         validated = self.args_schema(**kwargs)
+        self._authorize(validated)
         logger.debug("Tool '%s' invoked with: %s", self.name, validated.model_dump())
         try:
             result = await self._run(**validated.model_dump())
@@ -75,6 +83,68 @@ class BaseTool(ABC):
         except Exception as e:
             logger.error("Tool '%s' raised unexpected error: %s", self.name, e, exc_info=True)
             raise ToolError(f"Tool '{self.name}' failed: {e}") from e
+
+    def _authorize(self, validated: BaseModel) -> None:
+        """Consult the permission engine before execution.
+
+        Uses the ambient principal from src.permissions.context. Raises
+        ToolPermissionError (and audits PERMISSION_DENIED) if the acting role
+        lacks this tool's required_permission. No-op when the tool declares no
+        required_permission.
+        """
+        if self.required_permission is None:
+            return
+
+        # Imported lazily so the tool layer has no hard dependency on the
+        # permission engine (keeps unit tests of BaseTool self-contained).
+        from src.permissions.context import current_actor, current_role
+        from src.permissions.engine import permission_engine
+        from src.permissions.types import AccessRequest
+
+        role = current_role()
+        decision = permission_engine.evaluate(
+            AccessRequest(
+                role=role,
+                permission=self.required_permission,
+                resource_scope=self._resource_scope(validated),
+                actor=current_actor(),
+            )
+        )
+        if not decision.allowed:
+            self._audit_denied(decision.reason)
+            raise ToolPermissionError(
+                f"Tool '{self.name}' denied: {decision.reason}"
+            )
+
+    def _resource_scope(self, validated: BaseModel) -> Dict[str, Any]:
+        """Value-level scope for the permission check. Override where needed."""
+        return {}
+
+    def _audit_denied(self, reason: str) -> None:
+        """Best-effort audit of a permission denial (never raises)."""
+        try:
+            import asyncio
+
+            from src.audit.logger import audit_logger
+            from src.config.constants import AuditAction
+            from src.permissions.context import current_actor
+
+            coro = audit_logger.log(
+                action=AuditAction.PERMISSION_DENIED,
+                actor=current_actor(),
+                resource_type="tool",
+                resource_id=self.name,
+                outcome="DENIED",
+                detail=reason,
+            )
+            # Fire-and-forget if a loop is running; otherwise skip (audit is best-effort).
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                loop.create_task(coro)
+            else:
+                coro.close()
+        except Exception as e:  # noqa: BLE001
+            logger.debug("Permission-denied audit skipped: %s", e)
 
     @abstractmethod
     async def _run(self, **kwargs: Any) -> Any:

@@ -67,6 +67,12 @@ class AuditAction(str, Enum):
     WORKFLOW_ERROR = "WORKFLOW_ERROR"
     TOOL_INVOKED = "TOOL_INVOKED"
     TOOL_FAILED = "TOOL_FAILED"
+    # Guardrail outcomes (see src/guardrails/)
+    GUARDRAIL_BLOCKED = "GUARDRAIL_BLOCKED"          # A rail hard-blocked the payload
+    GUARDRAIL_TRANSFORMED = "GUARDRAIL_TRANSFORMED"  # A rail mutated the payload (e.g. PII redaction)
+    GUARDRAIL_ESCALATED = "GUARDRAIL_ESCALATED"      # A rail forced human approval
+    # Permission engine outcomes (see src/permissions/)
+    PERMISSION_DENIED = "PERMISSION_DENIED"          # A tool call was refused by policy
 
 
 class UserRole(str, Enum):
@@ -75,8 +81,9 @@ class UserRole(str, Enum):
     Inspired by deliberate's role-based approval system.
     """
     OPERATOR = "OPERATOR"    # Can run the assistant, view drafts
-    REVIEWER = "REVIEWER"    # Can approve or reject drafts
+    REVIEWER = "REVIEWER"    # Can approve or reject drafts (and therefore send)
     ADMIN = "ADMIN"          # Full access including config changes
+    SYSTEM = "SYSTEM"        # The harness itself — trusted principal for orchestrated actions
 
 
 # ── Gmail API Scopes ──────────────────────────────────────────────────────────

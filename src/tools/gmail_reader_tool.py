@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 from src.tools.base_tool import BaseTool
+from src.permissions.types import Action, Permission, ResourceType
 from src.integrations.gmail.client import GmailClient
 from src.integrations.gmail.message_parser import parse_thread
 
@@ -36,6 +37,7 @@ class GmailReaderTool(BaseTool):
         "Use this before drafting a reply to understand the conversation context."
     )
     args_schema = GmailReaderSchema
+    required_permission = Permission(Action.READ, ResourceType.THREAD)
 
     def __init__(self, client: Optional[GmailClient] = None) -> None:
         self._client = client or GmailClient()

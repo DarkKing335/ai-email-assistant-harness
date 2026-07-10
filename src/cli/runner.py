@@ -84,39 +84,52 @@ async def run_email_workflow(thread_id: str, demo: bool = False) -> None:
 
 def _display_result(ctx, elapsed: float) -> None:
     """Display the final result of a workflow run."""
-    from src.workflow.engine.orchestrator import WorkflowContext
-
     print_rule()
     console.print()
 
-    if ctx.error:
-        print_error(f"Workflow [bold]{ctx.workflow_id}[/] failed: {ctx.error}")
+    error = ctx.metadata.get("error")
+    if error:
+        print_error(f"Workflow [bold]{ctx.workflow_id}[/] failed: {error}")
         return
 
     # Draft created
     if ctx.draft:
         draft = ctx.draft
+        body = (
+            f"[dim]To:[/]      {rich_escape(draft.to)}\n"
+            f"[dim]Subject:[/] {rich_escape(draft.subject)}\n\n"
+            f"{rich_escape(draft.preview)}..."
+        )
+
+        # Surface guardrail flags so the reviewer sees WHY approval is needed.
+        flags = list(ctx.metadata.get("guardrail_escalations", []))
+        if draft.pii_detected:
+            flags.append("PII redacted in body")
+        if flags:
+            body += "\n\n[bold yellow]⚠ Guardrail flags:[/]\n" + "\n".join(
+                f"  [yellow]•[/] {rich_escape(f)}" for f in flags
+            )
+
         console.print(
             Panel(
-                f"[dim]To:[/]      {rich_escape(draft.to)}\n"
-                f"[dim]Subject:[/] {rich_escape(draft.subject)}\n\n"
-                f"{rich_escape(draft.preview)}...",
+                body,
                 title=f"[bold {Colors.PRIMARY}]📝 Draft Generated[/]",
-                border_style=Colors.PRIMARY,
+                border_style=Colors.WARNING if flags else Colors.PRIMARY,
                 expand=False,
             )
         )
 
     # Approval result
-    if ctx.approval:
-        if ctx.approval.is_approved:
+    approval = ctx.metadata.get("approval_record")
+    if approval:
+        if approval.is_approved:
             print_success(
-                f"Draft approved by [bold]{ctx.approval.reviewer}[/] → Email sent!"
+                f"Draft approved by [bold]{approval.reviewer}[/] → Email sent!"
             )
         else:
             print_warning(
-                f"Draft rejected by [bold]{ctx.approval.reviewer}[/]. "
-                f"Reason: {ctx.approval.comments or 'No reason given'}"
+                f"Draft rejected by [bold]{approval.reviewer}[/]. "
+                f"Reason: {approval.comments or 'No reason given'}"
             )
     else:
         print_info(
